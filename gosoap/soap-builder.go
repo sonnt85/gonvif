@@ -81,8 +81,12 @@ func (msg *SoapMessage) AddStringBodyContent(data string) {
 	}
 	//doc.FindElement("./Envelope/Body").AddChild(element)
 	bodyTag := doc.Root().SelectElement("Body")
-	bodyTag.AddChild(element)
-
+	if bodyTag == nil {
+		return
+	}
+	if len(data) != 0 {
+		bodyTag.AddChild(element)
+	}
 	//doc.IndentTabs()
 	res, _ := doc.WriteToString()
 
@@ -97,6 +101,9 @@ func (msg *SoapMessage) AddBodyContent(element *etree.Element) {
 	}
 	//doc.FindElement("./Envelope/Body").AddChild(element)
 	bodyTag := doc.Root().SelectElement("Body")
+	if bodyTag == nil {
+		return
+	}
 	bodyTag.AddChild(element)
 
 	//doc.IndentTabs()

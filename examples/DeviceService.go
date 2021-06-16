@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 
-	gonvif "github.com/sonnt85/onvif"
 	"github.com/sonnt85/gonvif/device"
 	"github.com/sonnt85/gonvif/gosoap"
 	"github.com/sonnt85/gonvif/xsd/onvif"
+	gonvif "github.com/sonnt85/onvif"
 )
 
 const (

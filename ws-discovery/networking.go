@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -41,9 +42,45 @@ func SendProbe(interfaceName string, scopes, types []string, namespaces map[stri
 	//</Probe>
 	//</Body>
 	//</Envelope>`
-
 	return sendUDPMulticast(probeSOAP.String(), interfaceName)
 
+}
+
+func _NetGetIfaceIP(ip string) (iface *net.Interface) {
+	interfaces, err := net.Interfaces() //all ifaces
+	if err != nil {
+		return nil
+	}
+	for _, interf := range interfaces {
+		if addrs, err := interf.Addrs(); err == nil {
+			for _, addr := range addrs {
+				if strings.Contains(addr.String(), ip) {
+					return &interf
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func _getDefaultIp() (string, error) {
+	conn, err := net.DialTimeout("udp", "1.1.1.1:80", time.Second)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	} else {
+		defer conn.Close()
+	}
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP.String(), nil
+}
+
+func _getDefaultIface() (iface *net.Interface) {
+	if dip, err := _getDefaultIp(); err == nil {
+		return _NetGetIfaceIP(dip)
+	}
+	return nil
 }
 
 func sendUDPMulticast(msg string, interfaceName string) []string {
@@ -51,13 +88,19 @@ func sendUDPMulticast(msg string, interfaceName string) []string {
 	data := []byte(msg)
 	iface, err := net.InterfaceByName(interfaceName)
 	if err != nil {
-		fmt.Println(err)
+		if iface = _getDefaultIface(); iface == nil {
+			fmt.Println("[Error]sendUDPMulticast", err)
+		} else {
+			fmt.Println("[Error]sendUDPMulticast", err)
+		}
 	}
 	group := net.IPv4(239, 255, 255, 250)
+	c, err := net.ListenPacket("udp4", "0.0.0.0:0")
 
-	c, err := net.ListenPacket("udp4", "0.0.0.0:1024")
+	//	c, err := net.ListenPacket("udp4", "0.0.0.0:1080")
 	if err != nil {
 		fmt.Println(err)
+		return result
 	}
 	defer c.Close()
 
@@ -77,7 +120,7 @@ func sendUDPMulticast(msg string, interfaceName string) []string {
 		}
 	}
 
-	if err := p.SetReadDeadline(time.Now().Add(time.Second * 1)); err != nil {
+	if err := p.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 		log.Fatal(err)
 	}
 
@@ -85,7 +128,7 @@ func sendUDPMulticast(msg string, interfaceName string) []string {
 		b := make([]byte, bufSize)
 		n, _, _, err := p.ReadFrom(b)
 		if err != nil {
-			fmt.Println(err)
+			//			fmt.Println("sendUDPMulticast:", err)
 			break
 		}
 		result = append(result, string(b[0:n]))

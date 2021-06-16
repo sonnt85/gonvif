@@ -171,7 +171,11 @@ func NewDevice(xaddr string) (*Device, error) {
 	dev := new(Device)
 	dev.xaddr = xaddr
 	dev.endpoints = make(map[string]string)
-	dev.addEndpoint("Device", "http://"+xaddr+"/onvif/device_service")
+	if strings.Contains(xaddr, "/") {
+		dev.addEndpoint("Device", xaddr)
+	} else {
+		dev.addEndpoint("Device", "http://"+xaddr+"/onvif/device_service")
+	}
 
 	getCapabilities := device.GetCapabilities{Category: "All"}
 
