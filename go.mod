@@ -1,4 +1,4 @@
-module github.com/sonnt85/onvif
+module github.com/sonnt85/gonvif
 
 go 1.14
 
