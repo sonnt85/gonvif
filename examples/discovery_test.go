@@ -1,4 +1,4 @@
-package example
+package main
 
 import (
 	"encoding/json"
@@ -10,26 +10,25 @@ import (
 	"testing"
 
 	"github.com/beevik/etree"
+	"github.com/sonnt85/gonvif"
 	"github.com/sonnt85/gonvif/device"
 	discover "github.com/sonnt85/gonvif/ws-discovery"
-	"github.com/sonnt85/onvif"
 )
 
 func TestGetAvailableDevicesAtSpecificEthernetInterface(t *testing.T) {
 
 	// client()
 	// runDiscovery("en0")
-	s := onvif.GetAvailableDevicesAtSpecificEthernetInterface("en0")
+	s := gonvif.GetAvailableDevicesAtSpecificEthernetInterface("en0")
 
 	log.Printf("%s", s)
 }
 
 func client() {
-	dev, err := onvif.NewDevice("192.168.3.10")
+	dev, err := gonvif.NewDevice(gonvif.DeviceParams{Xaddr: "192.168.3.10", Username: "admin", Password: "zsyy12345"})
 	if err != nil {
 		panic(err)
 	}
-	dev.Authenticate("admin", "zsyy12345")
 
 	log.Printf("output %+v", dev.GetServices())
 

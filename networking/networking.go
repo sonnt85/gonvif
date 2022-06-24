@@ -7,9 +7,10 @@ import (
 )
 
 // SendSoap send soap message
-func SendSoap(endpoint, message string) (*http.Response, error) {
-	httpClient := new(http.Client)
-
+func SendSoap(httpClient *http.Client, endpoint string, message string, timeout ...time.Duration) (*http.Response, error) {
+	if len(timeout) != 0 {
+		httpClient.Timeout = timeout[0]
+	}
 	resp, err := httpClient.Post(endpoint, "application/soap+xml; charset=utf-8", bytes.NewBufferString(message))
 	if err != nil {
 		return resp, err
@@ -19,10 +20,7 @@ func SendSoap(endpoint, message string) (*http.Response, error) {
 }
 
 // SendSoapWithTimeout send soap message with timeOut
-func SendSoapWithTimeout(endpoint string, message []byte, timeout time.Duration) (*http.Response, error) {
-	httpClient := &http.Client{
-		Timeout: timeout,
-	}
-
+func SendSoapWithTimeout(httpClient *http.Client, endpoint string, message []byte, timeout time.Duration) (*http.Response, error) {
+	httpClient.Timeout = timeout
 	return httpClient.Post(endpoint, "application/soap+xml; charset=utf-8", bytes.NewReader(message))
 }

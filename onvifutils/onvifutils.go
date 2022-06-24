@@ -1,27 +1,36 @@
 package onvifutils
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/aler9/gortsplib/pkg/url"
+	"github.com/sonnt85/gosutils/slogrus"
+
+	"github.com/aler9/gortsplib"
 	"github.com/beevik/etree"
 	"github.com/lunny/log"
 	"github.com/sonnt85/gonvif"
 	imaging "github.com/sonnt85/gonvif/Imaging"
 	"github.com/sonnt85/gonvif/analytics"
+	"github.com/sonnt85/gosutils/gcurl"
+
 	"github.com/sonnt85/gonvif/device"
 	"github.com/sonnt85/gonvif/event"
 	"github.com/sonnt85/gonvif/gosoap"
 	"github.com/sonnt85/gonvif/media"
 	"github.com/sonnt85/gonvif/networking"
 	"github.com/sonnt85/gonvif/ptz"
+	"github.com/sonnt85/gosutils/sexec"
 	"github.com/sonnt85/gosutils/sregexp"
 	"github.com/sonnt85/gosutils/sutils"
 	"github.com/sonnt85/snetutils"
@@ -39,6 +48,9 @@ var GetOnvifStruct = map[string]map[string]interface{}{
 func GetOnvifStructByServiceAndMethod(servicename, methodname string) (interface{}, error) {
 	if service, ok := GetOnvifStruct[servicename]; ok {
 		if method, ok := service[methodname]; ok {
+			if reflect.TypeOf(method).Kind() != reflect.Pointer {
+				method = reflect.ValueOf(&method).Addr().Interface()
+			}
 			return method, nil
 		} else {
 			return nil, errors.New("There is no such method " + methodname + " in the " + servicename + " service")
@@ -46,6 +58,53 @@ func GetOnvifStructByServiceAndMethod(servicename, methodname string) (interface
 	} else {
 		return nil, errors.New("There is no such service " + servicename)
 	}
+}
+
+func GetXMLNode(xmlBody string, nodeName string) (*xml.Decoder, *xml.StartElement, error) {
+
+	xmlBytes := bytes.NewBufferString(xmlBody)
+	decodedXML := xml.NewDecoder(xmlBytes)
+
+	for {
+		token, err := decodedXML.Token()
+		if err != nil {
+			break
+		}
+		switch et := token.(type) {
+		case xml.StartElement:
+			if et.Name.Local == nodeName {
+				return decodedXML, &et, nil
+			}
+		}
+	}
+	return nil, nil, fmt.Errorf("error in NodeName")
+}
+
+func CallOnvif(serviceName, methodName, acceptedData, username, password, xaddr string) (respone interface{}, err error) {
+	var responestr string
+
+	if responestr, err = CallNecessaryMethod(serviceName, methodName, acceptedData, username, password, xaddr); err != nil {
+		return
+	}
+
+	responeName := methodName + "Response"
+	if respone, err = GetOnvifStructByServiceAndMethod(serviceName, responeName); err != nil {
+		return responestr, nil
+	}
+	// xmlAnalize(respone, &responestr)
+	// var doc, node *xmlquery.Node
+	// if doc, err = xmlquery.Parse(strings.NewReader(responestr)); err == nil {
+	// 	if node, err = xmlquery.Query(doc, "//*[local-name() = '"+responeName+"']"); err == nil && node != nil {
+	// 		responetmp := node.OutputXML(true)
+	// 		err = xml.Unmarshal([]byte(responetmp), respone)
+	// 	}
+	// }
+	if decodedXML, et, err := GetXMLNode(responestr, responeName); err == nil {
+		if err = decodedXML.DecodeElement(respone, et); err == nil {
+			return respone, nil
+		}
+	}
+	return responestr, nil
 }
 
 func CallNecessaryMethodWithRetFilter(serviceName, methodName, acceptedData, username, password, xaddr, xpathfilter string) (map[string]string, string, error) {
@@ -74,7 +133,7 @@ func CallNecessaryMethodWithRetFilter(serviceName, methodName, acceptedData, use
 }
 
 func GetEndpoint(service, xaddr string) (string, error) {
-	dev, err := gonvif.NewDevice(xaddr)
+	dev, err := gonvif.NewDevice(gonvif.DeviceParams{Xaddr: xaddr})
 	if err != nil {
 		return "", err
 	}
@@ -167,56 +226,138 @@ func GetSnapshortUrls(xaddr, username, password string) ([]string, error) {
 	return retstr, nil
 }
 
-func GetStreamUrls(xaddrOrCamip, username, password string) ([]string, error) {
-	retstr := []string{}
-	var err error
-	//cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-	profilestoken, retype, err := CallNecessaryMethodWithRetFilter("media", "GetProfiles", "", username, password, xaddrOrCamip, "//*[local-name() = 'Profiles']/@token")
+func IsStreamOnline(link string) (ok bool) {
+	slogrus.Debug(link)
+	if !func() (ok bool) {
+		ok = false
+		c := gortsplib.Client{}
+
+		u, err := url.Parse(link)
+		if err != nil {
+			return
+		}
+		c.ReadTimeout = time.Second
+		err = c.Start(u.Scheme, u.Host)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		// c.Options(u)
+		_, _, _, err = c.Describe(u)
+		if err != nil {
+			return
+		}
+		return true
+	}() {
+		return false
+		// log.Printf("available tracks: %v\n", tracks)
+		// snetutils.DialExpec(link, "rtsp", time.Microsecond*500)
+		if _, _, err := sexec.ExecCommandShell(fmt.Sprintf("ffprobe -v quiet -print_format json -show_format '%s'", link), time.Second*10, true); err == nil {
+			return true
+		} else {
+			return false
+		}
+	} else {
+		return true
+	}
+}
+
+// func GetDeviceInformation(xaddrOrCamip, username, password string) (device.GetDeviceInformationResponse, error) {
+// 	CallNecessaryMethodWithRetFilter("device", "GetDeviceInformation", "", username, password, xaddrOrCamip, "")
+// }
+type CamStream struct {
+	Model        string   `json:"model,omitempty"`
+	MacVendor    string   `json:"macvendor,omitempty"`
+	Paths        []string `json:"paths"`
+	Manufacturer string   `json:"manufacturer,omitempty"`
+}
+
+var CamStreamsCache = []CamStream{}
+
+func GetStreamUrls(xaddrOrCamip, username, password string) (stream_urls []string, err error) {
+	stream_urls = make([]string, 0)
+	var profilestoken map[string]string
+	profilestoken, err = GetProfiles(xaddrOrCamip, username, password)
+	// profilestoken, retype, err := onvifutils.CallNecessaryMethodWithRetFilter("media", "GetProfiles", "", username, password, xaddrOrCamip, "//*[local-name() = 'Profiles']/@token")
 	if err != nil {
-		return retstr, err
+		return
 	}
 
-	if retype == "xml" {
-		return retstr, errors.New("can not found xpath")
+	ipcam := sregexp.New(sutils.Ipv4Regex).FindString(xaddrOrCamip)
+	if len(ipcam) == 0 {
+		return stream_urls, fmt.Errorf("can not get stream link of %s", xaddrOrCamip)
 	}
-
 	for _, v := range profilestoken {
 		//		log.Debug("profilestoken", v)
 		soappara := "<onvif><trt:ProfileToken>" + v + "</trt:ProfileToken></onvif>"
+		if stream_urls_map, retype, err := CallNecessaryMethodWithRetFilter("media", "GetStreamUri", soappara, username, password, xaddrOrCamip, "//*[local-name() = 'MediaUri']/node()[local-name() = 'Uri']"); err == nil && retype != "xml" {
+			for _, stream_url := range stream_urls_map {
+				stream_urls = append(stream_urls, stream_url)
+			}
+			break
+		}
 
-		stream_urls, retype, err := CallNecessaryMethodWithRetFilter("media", "GetStreamUri", soappara, username, password, xaddrOrCamip, "//*[local-name() = 'MediaUri']/node()[local-name() = 'Uri']")
+	}
+	if len(stream_urls) == 0 {
+		var resp *gcurl.Response
+		var dev *gonvif.Device
+		dev, err = gonvif.NewDevice(gonvif.DeviceParams{Xaddr: xaddrOrCamip, Username: username, Password: password})
 		if err != nil {
-			if model, retype, err := CallNecessaryMethodWithRetFilter("device", "GetDeviceInformation", soappara, username, password, xaddrOrCamip, "//*[local-name() = 'GetDeviceInformationResponse']/node()[local-name() = 'Model']"); err == nil && retype != "xml" {
-				ipcam := ""
-				if ipcams := sregexp.New(sutils.Ipv4Regex).FindStringSubmatch(xaddrOrCamip); len(ipcams) != 0 {
-					ipcam = ipcams[0]
+			return
+		}
+		if resp, err = gcurl.Get("https://raw.githubusercontent.com/sonnt85/camstreamlist/main/camstreamlist.json"); err == nil {
+			streams := make([]CamStream, 0)
+			if err = resp.JSONUnmarshal(&streams); err == nil || len(CamStreamsCache) != 0 {
+				if len(streams) != 0 {
+					CamStreamsCache = streams
 				}
-				if len(ipcam) == 0 {
-					return retstr, fmt.Errorf("can not get stream link of %s", xaddrOrCamip)
+			}
+		}
+		mac := ""
+		for i := 0; i < len(CamStreamsCache); i++ {
+			if len(CamStreamsCache[i].Model) != 0 {
+				if sregexp.New(CamStreamsCache[i].Model).MatchString(dev.Model) {
+					stream_urls = CamStreamsCache[i].Paths
+					break
 				}
-				for _, v := range model {
-					if v == "IP Camera" {
-						return []string{"rtsp://" + ipcam + "/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif"}, nil
+			}
+
+			if len(CamStreamsCache[i].MacVendor) != 0 {
+				if len(mac) == 0 {
+					mac, _ = snetutils.MacFromIP(ipcam)
+					mac = strings.ReplaceAll(mac, ":", "")
+				}
+				if len(mac) != 0 {
+					if sregexp.New(CamStreamsCache[i].MacVendor).MatchString(mac) {
+						stream_urls = CamStreamsCache[i].Paths
+						break
 					}
 				}
 			}
-			return retstr, err
-		}
-
-		if retype == "xml" {
-			return retstr, errors.New("can not found xpath")
-		}
-
-		for _, stream_url := range stream_urls {
-			if len(username) != 0 || len(password) != 0 {
-				stream_url = strings.Replace(stream_url, "rtsp://", "rtsp://"+username+":"+password+"@", 1)
+			if len(CamStreamsCache[i].Manufacturer) != 0 {
+				if sregexp.New(CamStreamsCache[i].Manufacturer).MatchString(dev.Manufacturer) {
+					stream_urls = CamStreamsCache[i].Paths
+					break
+				}
 			}
-			retstr = append(retstr, stream_url)
 		}
 	}
-
-	sort.Strings(retstr)
-	return retstr, nil
+	retstream_urls := make([]string, 0)
+	if len(stream_urls) != 0 {
+		for i := range stream_urls {
+			stream_urls[i] = sregexp.New(sutils.Ipv4Regex).ReplaceAllString(stream_urls[i], ipcam)
+			if len(username) != 0 || len(password) != 0 {
+				stream_urls[i] = strings.Replace(stream_urls[i], "://", "://"+username+":"+password+"@", 1)
+			}
+			if IsStreamOnline(stream_urls[i]) {
+				retstream_urls = append(retstream_urls, stream_urls[i])
+				err = nil
+				// return []string{stream_urls[i]}, nil
+			}
+		}
+	}
+	sort.Strings(retstream_urls)
+	return retstream_urls, err
 }
 
 func CallNecessaryMethod(serviceName, methodName, acceptedData, username, password, xaddr string) (string, error) {
@@ -226,10 +367,6 @@ func CallNecessaryMethod(serviceName, methodName, acceptedData, username, passwo
 	serviceName = strings.ToLower(serviceName)
 
 	if methodStruct, err = GetOnvifStructByServiceAndMethod(serviceName, methodName); err != nil {
-		return "", err
-	}
-
-	if err != nil { //done
 		return "", err
 	}
 	noparserXML := false
@@ -285,17 +422,11 @@ func CallNecessaryMethod(serviceName, methodName, acceptedData, username, passwo
 	}
 
 	soap := gosoap.NewEmptySOAP()
-	//	log.Println("AddStringBodyContent:" + *resp)
-	//	*resp = `<ProfileToken>  <abc1>MediaProfile000`
 	soap.AddStringBodyContent(resp)
-	//	log.Println(":end")
-
 	soap.AddRootNamespaces(gonvif.Xlmns)
 	soap.AddWSSecurity(username, password)
 
-	//	log.Println("endpoint:" + endpoint + ":end" + "\nsoap2send:\n" + soap.String() + ":end")
-
-	servResp, err := networking.SendSoapWithTimeout(endpoint, []byte(soap.String()), time.Millisecond*3000)
+	servResp, err := networking.SendSoapWithTimeout(new(http.Client), endpoint, []byte(soap.String()), time.Millisecond*3000)
 	if err != nil {
 		log.Error("SendSoap error:", err, ":end")
 		return "", err

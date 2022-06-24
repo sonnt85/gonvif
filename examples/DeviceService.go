@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/sonnt85/gonvif"
 	"github.com/sonnt85/gonvif/device"
 	"github.com/sonnt85/gonvif/gosoap"
 	"github.com/sonnt85/gonvif/xsd/onvif"
-	gonvif "github.com/sonnt85/onvif"
 )
 
 const (
@@ -27,12 +27,15 @@ func readResponse(resp *http.Response) string {
 
 func main() {
 	//Getting an camera instance
-	dev, err := gonvif.NewDevice("192.168.13.14:80")
+	dev, err := gonvif.NewDevice(gonvif.DeviceParams{
+		Xaddr:      "192.168.13.14:80",
+		Username:   login,
+		Password:   password,
+		HttpClient: new(http.Client),
+	})
 	if err != nil {
 		panic(err)
 	}
-	//Authorization
-	dev.Authenticate(login, password)
 
 	//Preparing commands
 	systemDateAndTyme := device.GetSystemDateAndTime{}

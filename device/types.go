@@ -124,13 +124,13 @@ type GetDeviceInformation struct {
 }
 
 type GetDeviceInformationResponse struct {
+	// XMLName         string `xml:"GetDeviceInformationResponse"`
 	Manufacturer    string
 	Model           string
 	FirmwareVersion string
 	SerialNumber    string
 	HardwareId      string
 }
-
 type SetSystemDateAndTime struct {
 	XMLName         string                `xml:"tds:SetSystemDateAndTime"`
 	DateTimeType    onvif.SetDateTimeType `xml:"tds:DateTimeType"`

@@ -10,13 +10,12 @@ package wsdiscovery
  *******************************************************/
 
 import (
-	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/gofrs/uuid"
+	"github.com/sonnt85/gosutils/slogrus"
 	"golang.org/x/net/ipv4"
 )
 
@@ -66,7 +65,7 @@ func _NetGetIfaceIP(ip string) (iface *net.Interface) {
 func _getDefaultIp() (string, error) {
 	conn, err := net.DialTimeout("udp", "1.1.1.1:80", time.Second)
 	if err != nil {
-		log.Println(err)
+		slogrus.Print(err)
 		return "", err
 	} else {
 		defer conn.Close()
@@ -85,50 +84,52 @@ func _getDefaultIface() (iface *net.Interface) {
 
 func sendUDPMulticast(msg string, interfaceName string) []string {
 	var result []string
-	data := []byte(msg)
-	iface, err := net.InterfaceByName(interfaceName)
-	if err != nil {
-		if iface = _getDefaultIface(); iface == nil {
-			fmt.Println("[Error]sendUDPMulticast", err)
-		} else {
-			fmt.Println("[Error]sendUDPMulticast", err)
-		}
-	}
-	group := net.IPv4(239, 255, 255, 250)
 	c, err := net.ListenPacket("udp4", "0.0.0.0:0")
-
-	//	c, err := net.ListenPacket("udp4", "0.0.0.0:1080")
 	if err != nil {
-		fmt.Println(err)
+		slogrus.Print(err)
 		return result
 	}
 	defer c.Close()
 
+	iface, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		if iface = _getDefaultIface(); iface == nil {
+			slogrus.Print("[Error]sendUDPMulticast", err)
+		} else {
+			slogrus.Print("[Error]sendUDPMulticast", err)
+		}
+	}
+	group := net.IPv4(239, 255, 255, 250)
+
 	p := ipv4.NewPacketConn(c)
 	if err := p.JoinGroup(iface, &net.UDPAddr{IP: group}); err != nil {
-		fmt.Println(err)
+		slogrus.Print(err)
 	}
 
 	dst := &net.UDPAddr{IP: group, Port: 3702}
+	data := []byte(msg)
 	for _, ifi := range []*net.Interface{iface} {
 		if err := p.SetMulticastInterface(ifi); err != nil {
-			fmt.Println(err)
+			slogrus.Print(err)
 		}
 		p.SetMulticastTTL(2)
 		if _, err := p.WriteTo(data, nil, dst); err != nil {
-			fmt.Println(err)
+			slogrus.Print(err)
 		}
 	}
 
-	if err := p.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
-		log.Fatal(err)
+	timeOutRead := time.Second * 2
+	if err := p.SetReadDeadline(time.Now().Add(timeOutRead)); err != nil {
+		slogrus.Fatal(err)
 	}
 
 	for {
 		b := make([]byte, bufSize)
 		n, _, _, err := p.ReadFrom(b)
 		if err != nil {
-			//			fmt.Println("sendUDPMulticast:", err)
+			// if !errors.Is(err, os.ErrDeadlineExceeded) {
+			// 	slogrus.Print(err)
+			// }
 			break
 		}
 		result = append(result, string(b[0:n]))
