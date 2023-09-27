@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -19,7 +19,7 @@ import (
 	wsdiscovery "github.com/sonnt85/gonvif/ws-discovery"
 )
 
-//Xlmns XML Scheam
+// Xlmns XML Scheam
 var Xlmns = map[string]string{
 	"onvif":   "http://www.onvif.org/ver10/schema",
 	"tds":     "http://www.onvif.org/ver10/device/wsdl",
@@ -38,7 +38,7 @@ var Xlmns = map[string]string{
 	"wsaw":    "http://www.w3.org/2006/05/addressing/wsdl",
 }
 
-//DeviceType alias for int
+// DeviceType alias for int
 type DeviceType int
 
 // Onvif Device Tyoe
@@ -67,9 +67,9 @@ func (devType DeviceType) String() string {
 
 type DeviceInfo device.GetDeviceInformationResponse
 
-//Device for a new device of onvif and deviceInfo
-//struct represents an abstract ONVIF device.
-//It contains methods, which helps to communicate with ONVIF device
+// Device for a new device of onvif and deviceInfo
+// struct represents an abstract ONVIF device.
+// It contains methods, which helps to communicate with ONVIF device
 type Device struct {
 	params    DeviceParams
 	endpoints map[string]string
@@ -83,18 +83,18 @@ type DeviceParams struct {
 	HttpClient *http.Client
 }
 
-//GetServices return available endpoints
+// GetServices return available endpoints
 func (dev *Device) GetServices() map[string]string {
 	return dev.endpoints
 }
 
-//GetDeviceInfo return available endpoints
+// GetDeviceInfo return available endpoints
 func (dev *Device) GetDeviceInfo() DeviceInfo {
 	return dev.DeviceInfo
 }
 
 func readResponse(resp *http.Response) string {
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ""
 		// slogrus.Error(err)
@@ -102,7 +102,7 @@ func readResponse(resp *http.Response) string {
 	return string(b)
 }
 
-//GetAvailableDevicesAtSpecificEthernetInterface ...
+// GetAvailableDevicesAtSpecificEthernetInterface ...
 func GetAvailableDevicesAtSpecificEthernetInterface(interfaceName string) []Device {
 	/*
 		Call an ws-discovery Probe Message to Discover NVT type Devices
@@ -150,7 +150,7 @@ func GetAvailableDevicesAtSpecificEthernetInterface(interfaceName string) []Devi
 func (dev *Device) getSupportedServices(resp *http.Response) {
 	doc := etree.NewDocument()
 
-	data, _ := ioutil.ReadAll(resp.Body)
+	data, _ := io.ReadAll(resp.Body)
 
 	if err := doc.ReadFromBytes(data); err != nil {
 		return
@@ -165,7 +165,7 @@ func (dev *Device) getSupportedServices(resp *http.Response) {
 	}
 }
 
-//NewDevice function construct a ONVIF Device entity
+// NewDevice function construct a ONVIF Device entity
 func NewDevice(params DeviceParams) (*Device, error) {
 	dev := new(Device)
 	dev.params = params
@@ -227,7 +227,7 @@ func (dev *Device) addEndpoint(Key, Value string) {
 	dev.endpoints[lowCaseKey] = Value
 }
 
-//GetEndpoint returns specific ONVIF service endpoint address
+// GetEndpoint returns specific ONVIF service endpoint address
 func (dev *Device) GetEndpoint(name string) string {
 	return dev.endpoints[strings.ToLower(name)]
 	// return dev.endpoints[name]
@@ -248,7 +248,7 @@ func (dev Device) buildMethodSOAP(msg string) (gosoap.SoapMessage, error) {
 	return soap, nil
 }
 
-//getEndpoint functions get the target service endpoint in a better way
+// getEndpoint functions get the target service endpoint in a better way
 func (dev Device) getEndpoint(endpoint string) (string, error) {
 
 	// common condition, endpointMark in map we use this.
@@ -269,8 +269,8 @@ func (dev Device) getEndpoint(endpoint string) (string, error) {
 	return endpointURL, errors.New("target endpoint service not found")
 }
 
-//CallMethod functions call an method, defined <method> struct.
-//You should use Authenticate method to call authorized requests.
+// CallMethod functions call an method, defined <method> struct.
+// You should use Authenticate method to call authorized requests.
 func (dev Device) CallMethod(method interface{}) (*http.Response, error) {
 	pkgPath := strings.Split(reflect.TypeOf(method).PkgPath(), "/")
 	pkg := strings.ToLower(pkgPath[len(pkgPath)-1])
@@ -282,7 +282,7 @@ func (dev Device) CallMethod(method interface{}) (*http.Response, error) {
 	return dev.callMethodDo(endpoint, method)
 }
 
-//CallMethod functions call an method, defined <method> struct with authentication data
+// CallMethod functions call an method, defined <method> struct with authentication data
 func (dev Device) callMethodDo(endpoint string, method interface{}) (*http.Response, error) {
 	output, err := xml.MarshalIndent(method, "  ", "    ")
 	if err != nil {

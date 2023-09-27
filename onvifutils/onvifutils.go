@@ -5,7 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -252,7 +252,7 @@ func IsStreamOnline(link string) (ok bool) {
 		return false
 		// log.Printf("available tracks: %v\n", tracks)
 		// snetutils.DialExpec(link, "rtsp", time.Microsecond*500)
-		if _, _, err := sexec.ExecCommandShell(fmt.Sprintf("ffprobe -v quiet -print_format json -show_format '%s'", link), time.Second*10, true); err == nil {
+		if _, _, err := sexec.ExecCommandShellTimeout(fmt.Sprintf("ffprobe -v quiet -print_format json -show_format '%s'", link), time.Second*10); err == nil {
 			return true
 		} else {
 			return false
@@ -262,9 +262,9 @@ func IsStreamOnline(link string) (ok bool) {
 	}
 }
 
-// func GetDeviceInformation(xaddrOrCamip, username, password string) (device.GetDeviceInformationResponse, error) {
-// 	CallNecessaryMethodWithRetFilter("device", "GetDeviceInformation", "", username, password, xaddrOrCamip, "")
-// }
+//	func GetDeviceInformation(xaddrOrCamip, username, password string) (device.GetDeviceInformationResponse, error) {
+//		CallNecessaryMethodWithRetFilter("device", "GetDeviceInformation", "", username, password, xaddrOrCamip, "")
+//	}
 type CamStream struct {
 	Model        string   `json:"model,omitempty"`
 	MacVendor    string   `json:"macvendor,omitempty"`
@@ -273,6 +273,7 @@ type CamStream struct {
 }
 
 var CamStreamsCache = []CamStream{}
+var camStreamLastCommit string
 
 func GetStreamUrls(xaddrOrCamip, username, password string) (stream_urls []string, err error) {
 	stream_urls = make([]string, 0)
@@ -305,14 +306,19 @@ func GetStreamUrls(xaddrOrCamip, username, password string) (stream_urls []strin
 		if err != nil {
 			return
 		}
-		if resp, err = gcurl.Get("https://raw.githubusercontent.com/sonnt85/camstreamlist/main/camstreamlist.json"); err == nil {
-			streams := make([]CamStream, 0)
-			if err = resp.JSONUnmarshal(&streams); err == nil || len(CamStreamsCache) != 0 {
-				if len(streams) != 0 {
-					CamStreamsCache = streams
+		// curl -H "Accept: application/vnd.github.VERSION.sha"
+		if resp, err = gcurl.GetDefaultRequest().WithHeader("Accept", "application/vnd.github.VERSION.sha").Get("https://api.github.com/repos/sonnt85/camstreamlist/commits/main"); err == nil {
+			if currentCommit, err := resp.Text(); err == nil && camStreamLastCommit != currentCommit {
+				if resp, err = gcurl.Get("https://raw.githubusercontent.com/sonnt85/camstreamlist/main/camstreamlist.json"); err == nil {
+					streams := make([]CamStream, 0)
+					if err = resp.JSONUnmarshal(&streams); err == nil && len(streams) != 0 {
+						camStreamLastCommit = currentCommit
+						CamStreamsCache = streams
+					}
 				}
 			}
 		}
+
 		mac := ""
 		for i := 0; i < len(CamStreamsCache); i++ {
 			if len(CamStreamsCache[i].Model) != 0 {
@@ -432,7 +438,7 @@ func CallNecessaryMethod(serviceName, methodName, acceptedData, username, passwo
 		return "", err
 	}
 
-	rsp, err := ioutil.ReadAll(servResp.Body)
+	rsp, err := io.ReadAll(servResp.Body)
 	if err != nil {
 		return "", err
 	}
