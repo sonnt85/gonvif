@@ -16,7 +16,7 @@ import (
 	"github.com/sonnt85/gonvif/device"
 	"github.com/sonnt85/gonvif/gosoap"
 	"github.com/sonnt85/gonvif/networking"
-	wsdiscovery "github.com/sonnt85/gonvif/ws-discovery"
+	"github.com/sonnt85/gonvif/wsdiscovery"
 )
 
 // Xlmns XML Scheam
@@ -105,7 +105,7 @@ func readResponse(resp *http.Response) string {
 // GetAvailableDevicesAtSpecificEthernetInterface ...
 func GetAvailableDevicesAtSpecificEthernetInterface(interfaceName string) []Device {
 	/*
-		Call an ws-discovery Probe Message to Discover NVT type Devices
+		Call an ws-iscovery Probe Message to Discover NVT type Devices
 	*/
 	devices := wsdiscovery.SendProbe(interfaceName, nil, []string{"dn:" + NVT.String()}, map[string]string{"dn": "http://www.onvif.org/ver10/network/wsdl"})
 	nvtDevices := make([]Device, 0)

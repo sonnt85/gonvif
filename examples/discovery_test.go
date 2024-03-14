@@ -12,7 +12,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sonnt85/gonvif"
 	"github.com/sonnt85/gonvif/device"
-	discover "github.com/sonnt85/gonvif/ws-discovery"
+	discover "github.com/sonnt85/gonvif/wsdiscovery"
 )
 
 func TestGetAvailableDevicesAtSpecificEthernetInterface(t *testing.T) {
