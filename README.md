@@ -75,6 +75,10 @@ resp, err := dev.CallMethod(media.GetProfiles{})
 - `onvifutils` — ONVIF utility helpers
 - `xsd` — XSD built-in and ONVIF schema types
 
+## Author
+
+**sonnt85** — [thanhson.rf@gmail.com](mailto:thanhson.rf@gmail.com)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
