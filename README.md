@@ -1,5 +1,7 @@
 # gonvif
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/sonnt85/gonvif.svg)](https://pkg.go.dev/github.com/sonnt85/gonvif)
+
 ONVIF client library for Go — discover and control IP cameras via the ONVIF protocol.
 
 ## Installation
