@@ -21,7 +21,7 @@ import (
 
 const bufSize = 8192
 
-//SendProbe to device
+// SendProbe to device
 func SendProbe(interfaceName string, scopes, types []string, namespaces map[string]string) []string {
 	// Creating UUID Version 4
 	uuidV4 := uuid.Must(uuid.NewV4())

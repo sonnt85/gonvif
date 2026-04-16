@@ -30,7 +30,6 @@ import (
 	"github.com/sonnt85/gonvif/media"
 	"github.com/sonnt85/gonvif/networking"
 	"github.com/sonnt85/gonvif/ptz"
-	"github.com/sonnt85/gosutils/sexec"
 	"github.com/sonnt85/gosutils/sregexp"
 	"github.com/sonnt85/gosutils/sutils"
 	"github.com/sonnt85/snetutils"
@@ -191,7 +190,7 @@ func GetProfiles(xaddr, username, password string) (map[string]string, error) {
 	return retstr, nil
 }
 
-func GetSnapshortUrls(xaddr, username, password string) ([]string, error) {
+func GetSnapshotUrls(xaddr, username, password string) ([]string, error) {
 	retstr := []string{}
 	var err error
 
@@ -226,6 +225,11 @@ func GetSnapshortUrls(xaddr, username, password string) ([]string, error) {
 	return retstr, nil
 }
 
+// Deprecated: Use GetSnapshotUrls instead.
+func GetSnapshortUrls(xaddr, username, password string) ([]string, error) {
+	return GetSnapshotUrls(xaddr, username, password)
+}
+
 func IsStreamOnline(link string) (ok bool) {
 	slogrus.Debug(link)
 	if !func() (ok bool) {
@@ -250,13 +254,6 @@ func IsStreamOnline(link string) (ok bool) {
 		return true
 	}() {
 		return false
-		// log.Printf("available tracks: %v\n", tracks)
-		// snetutils.DialExpec(link, "rtsp", time.Microsecond*500)
-		if _, _, err := sexec.ExecCommandShellTimeout(fmt.Sprintf("ffprobe -v quiet -print_format json -show_format '%s'", link), time.Second*10); err == nil {
-			return true
-		} else {
-			return false
-		}
 	} else {
 		return true
 	}
