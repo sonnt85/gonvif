@@ -16,12 +16,8 @@ import (
 )
 
 func TestGetAvailableDevicesAtSpecificEthernetInterface(t *testing.T) {
-
-	// client()
-	// runDiscovery("en0")
 	s := gonvif.GetAvailableDevicesAtSpecificEthernetInterface("en0")
-
-	log.Printf("%v", s)
+	t.Logf("devices: %v", s)
 }
 
 func client() {
